@@ -767,13 +767,20 @@ function buildJudge(){
 function showReq(elId,text,hasImg){
   var el=document.getElementById(elId);
   el.style.display='block';
-  var h='<div class="rbox"><div style="font-size:13px;font-weight:600;margin-bottom:8px">Claude에게 보낼 메시지</div><div class="rtxt">'+esc(text)+'</div>';
-  h+='<button class="cbtn" id="cbtn-'+elId+'">복사하기</button>';
-  h+='<button class="obtn" onclick="window.open(\'https://claude.ai\',\'_blank\')">Claude.ai 열기</button>';
-  if(hasImg) h+='<div class="wbox" style="margin-top:8px">차트 이미지도 Claude.ai에서 함께 첨부해 주세요</div>';
+  var h='<div class="rbox">';
+  h+='<div style="font-size:13px;font-weight:600;margin-bottom:4px">Claude에게 보낼 메시지</div>';
+  h+='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">복사 후 Claude Projects에 붙여넣으세요</div>';
+  h+='<div class="rtxt">'+esc(text)+'</div>';
+  h+='<button class="cbtn" id="cbtn-'+elId+'">메시지 복사</button>';
+  h+='<button class="obtn" id="proj-'+elId+'" style="background:var(--blue);color:#fff;border:none;margin-top:6px">복사 + Claude Projects 열기</button>';
+  if(hasImg) h+='<div class="wbox" style="margin-top:8px">차트 이미지를 Claude Projects에서 함께 첨부해 주세요 — 메시지 붙여넣기 후 이미지 첨부하고 전송</div>';
   h+='</div>';
   el.innerHTML=h;
   document.getElementById('cbtn-'+elId).addEventListener('click',function(){ copyT(text); });
+  document.getElementById('proj-'+elId).addEventListener('click',function(){
+    copyT(text);
+    setTimeout(function(){ window.open('https://claude.ai/project','_blank'); },300);
+  });
   el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function copyT(text){
