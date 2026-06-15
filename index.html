@@ -484,38 +484,56 @@ function updateGsUrl() {
 function syncLoad() {
   if (!cfg.gsUrl || syncing) return;
   syncing = true;
-  toast('&#x1F504; 데이터 불러오는 중...');
-  fetch(cfg.gsUrl+'?action=load')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.data && d.data !== '{}') {
-        try {
-          var remote = JSON.parse(d.data);
+  toast('데이터 불러오는 중...');
+  jsonp(cfg.gsUrl + '?action=load', function(d) {
+    if (d && d.data && d.data !== '{}') {
+      try {
+        var remote = JSON.parse(d.data);
+        if (remote && remote.accounts) {
           db = remote;
           localStorage.setItem(KEY, JSON.stringify(db));
-        } catch(e){}
-      }
-      syncing = false;
-      startApp();
-      toast('동기화 완료');
-    })
-    .catch(function(e){
-      syncing = false;
-      startApp();
-      toast('동기화 실패 — 로컬 데이터 사용 (' + (e&&e.message?e.message:'') + ')');
-    });
+        }
+      } catch(e){}
+    }
+    syncing = false;
+    startApp();
+    toast('동기화 완료');
+  }, function() {
+    syncing = false;
+    startApp();
+    toast('동기화 실패 — 로컬 데이터 사용');
+  });
 }
 
 function syncSave() {
   if (!cfg.gsUrl) return;
   var data = encodeURIComponent(JSON.stringify(db));
-  fetch(cfg.gsUrl + '?action=save&data=' + data)
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.ok) toast('저장됐습니다');
-      else toast('저장 실패: ' + (d.error||''));
-    })
-    .catch(function(){ toast('저장 실패 — 로컬에는 저장됨'); });
+  jsonp(cfg.gsUrl + '?action=save&data=' + data, function(d) {
+    if (d && d.ok) toast('저장됐습니다');
+  }, function() {
+    toast('저장 실패 — 로컬에는 저장됨');
+  });
+}
+
+function jsonp(url, onSuccess, onError) {
+  var cbName = 'cb_' + Date.now();
+  var script = document.createElement('script');
+  var timer = setTimeout(function() {
+    cleanup();
+    if (onError) onError();
+  }, 8000);
+  function cleanup() {
+    clearTimeout(timer);
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+  }
+  window[cbName] = function(data) {
+    cleanup();
+    if (onSuccess) onSuccess(data);
+  };
+  script.src = url + '&callback=' + cbName;
+  script.onerror = function() { cleanup(); if (onError) onError(); };
+  document.head.appendChild(script);
 }
 
 function syncNow() { syncLoad(); }
