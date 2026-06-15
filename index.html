@@ -303,6 +303,35 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;font-size:14px}
   </div>
 </div>
 
+<!-- 종목 수정 모달 -->
+<div class="mbg" id="m-edit" onclick="closeMBg(event,'m-edit')">
+  <div class="modal">
+    <button class="mc" onclick="closeM('m-edit')">&#x2715;</button>
+    <h2>&#x270F; 종목 수정</h2>
+    <input type="hidden" id="edit-id"/>
+    <div class="field"><label>계좌</label><select id="edit-acct"></select></div>
+    <div class="g2">
+      <div class="field"><label>종목명*</label><input id="edit-name" type="text"/></div>
+      <div class="field"><label>티커</label><input id="edit-tkr" type="text"/></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>시장</label><select id="edit-mkt"><option>KOSPI</option><option>KOSDAQ</option><option>ETF</option></select></div>
+      <div class="field"><label>전략</label><select id="edit-str"><option value="단기">단기</option><option value="중기">중기</option><option value="장기">장기</option></select></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>평균매수가(원)*</label><input id="edit-buy" type="number"/></div>
+      <div class="field"><label>수량*</label><input id="edit-qty" type="number"/></div>
+    </div>
+    <div class="divider"></div>
+    <div class="g2">
+      <div class="field"><label>목표가(원)</label><input id="edit-tgt" type="number" placeholder="미설정"/></div>
+      <div class="field"><label>손절선(원)</label><input id="edit-stp" type="number" placeholder="미설정"/></div>
+    </div>
+    <div class="field"><label>투자 thesis / 매수 이유</label><textarea id="edit-memo" placeholder="예: 실적 기대, 화장품 수출 개선..."></textarea></div>
+    <button class="btn bp" onclick="saveEdit()">수정 완료</button>
+  </div>
+</div>
+
 <!-- 설정 모달 -->
 <div class="mbg" id="m-cfg" onclick="closeMBg(event,'m-cfg')">
   <div class="modal">
@@ -791,7 +820,7 @@ function renderDash(){
   document.getElementById('dash-ct').innerHTML=h;
 }
 function renderHold(){
-  var h='<button class="chip '+(hFil==='all'?'on':'')+'" onclick="setHF(\'all\')">전체</button>';
+  var h='<button class="chip '+(hFil==='all'?'on':'')+'" onclick="setHF('all')">전체</button>';
   db.accounts.forEach(function(a){ h+='<button class="chip '+(hFil==a.id?'on':'')+'" onclick="setHF('+a.id+')" style="'+(hFil==a.id?'background:'+a.color+';border-color:'+a.color:'')+'">'+esc(a.name)+'</button>'; });
   document.getElementById('h-chips').innerHTML=h;
   var list=hFil==='all'?db.stocks:db.stocks.filter(function(s){ return s.acctId===Number(hFil); });
@@ -801,19 +830,59 @@ function renderHold(){
   var html='';
   list.forEach(function(s){
     var acct=db.accounts.find(function(a){ return a.id===s.acctId; });
-    html+='<div class="si"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div><span style="font-size:15px;font-weight:600">'+esc(s.name)+'</span>';
+    html+='<div class="si" id="si-'+s.id+'">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    html+='<div><span style="font-size:15px;font-weight:600">'+esc(s.name)+'</span>';
     if(s.ticker) html+='<span class="tag">'+s.ticker+'</span>';
     html+='<span class="tag">'+s.strat+'</span>';
     if(acct) html+='<span class="tag" style="border-color:'+acct.color+';color:'+acct.color+'">'+esc(acct.name)+'</span>';
-    html+='</div><button class="bsm" onclick="delStock('+s.id+')" style="color:var(--red);font-size:12px">삭제</button></div>';
+    html+='</div>';
+    html+='<div style="display:flex;gap:6px">';
+    html+='<button class="bsm" onclick="openEdit('+s.id+')" style="font-size:12px">수정</button>';
+    html+='<button class="bsm" onclick="delStock('+s.id+')" style="color:var(--red);font-size:12px">삭제</button>';
+    html+='</div></div>';
     html+='<div style="font-size:12px;color:var(--txt2);line-height:1.8">매수가 <strong>'+fmt(s.avgBuy)+'원</strong> · '+fmt(s.qty)+'주 · '+fmt(s.avgBuy*s.qty)+'원<br>';
     html+='목표가 '+(s.target?'<span style="color:var(--green)">'+fmt(s.target)+'원</span>':'<span style="color:var(--warn)">미설정</span>')+' · 손절선 '+(s.stop?'<span style="color:var(--red)">'+fmt(s.stop)+'원</span>':'<span style="color:var(--warn)">미설정</span>');
-    if(s.memo) html+='<br><em>'+esc(s.memo)+'</em>';
-    html+='</div></div>';
+    html+='</div>';
+    html+='<div style="margin-top:8px">';
+    if(s._editMemo){
+      html+='<div style="display:flex;gap:6px;align-items:flex-start">';
+      html+='<textarea id="memo-'+s.id+'" style="flex:1;font-size:13px;padding:8px;border:1px solid var(--bm);border-radius:var(--rs);background:var(--bg);color:var(--txt);min-height:55px;resize:vertical;font-family:inherit;line-height:1.5">'+esc(s.memo||'')+'</textarea>';
+      html+='<div style="display:flex;flex-direction:column;gap:4px">';
+      html+='<button onclick="saveMemo('+s.id+')" style="padding:7px 10px;background:var(--blue);color:#fff;border:none;border-radius:var(--rs);font-size:12px;cursor:pointer;white-space:nowrap">저장</button>';
+      html+='<button onclick="cancelMemo('+s.id+')" style="padding:7px 10px;background:var(--card);color:var(--txt2);border:1px solid var(--bdr);border-radius:var(--rs);font-size:12px;cursor:pointer">취소</button>';
+      html+='</div></div>';
+    } else {
+      html+='<div style="display:flex;align-items:center;gap:6px">';
+      if(s.memo){ html+='<div style="font-size:12px;color:var(--txt2);font-style:italic;flex:1">'+esc(s.memo)+'</div>'; }
+      else { html+='<div style="font-size:12px;color:var(--bdr);flex:1">메모 없음</div>'; }
+      html+='<button onclick="toggleMemo('+s.id+')" style="padding:4px 9px;background:transparent;color:var(--txt2);border:1px solid var(--bdr);border-radius:var(--rs);font-size:11px;cursor:pointer;white-space:nowrap">&#x270F; 메모</button>';
+      html+='</div>';
+    }
+    html+='</div>';
+    html+='</div>';
   });
   document.getElementById('hold-list').innerHTML=html;
 }
 function setHF(v){ hFil=v; renderHold(); }
+function toggleMemo(sid){
+  var s=db.stocks.find(function(x){ return x.id===sid; });
+  if(!s) return;
+  s._editMemo=true; renderHold();
+  var ta=document.getElementById('memo-'+sid);
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); }
+}
+function cancelMemo(sid){
+  var s=db.stocks.find(function(x){ return x.id===sid; });
+  if(s) s._editMemo=false; renderHold();
+}
+function saveMemo(sid){
+  var s=db.stocks.find(function(x){ return x.id===sid; });
+  var ta=document.getElementById('memo-'+sid);
+  if(!s||!ta) return;
+  s.memo=ta.value.trim(); s._editMemo=false;
+  save(); renderHold(); toast('메모가 저장됐습니다');
+}
 function renderTrades(){
   var h='<button class="chip '+(trFil==='all'?'on':'')+'" onclick="setTF(\'all\')">전체</button>';
   db.accounts.forEach(function(a){ h+='<button class="chip '+(trFil==a.id?'on':'')+'" onclick="setTF('+a.id+')" style="'+(trFil==a.id?'background:'+a.color+';border-color:'+a.color:'')+'">'+esc(a.name)+'</button>'; });
@@ -832,6 +901,49 @@ function renderTrades(){
   document.getElementById('trade-list').innerHTML=html;
 }
 function setTF(v){ trFil=v; renderTrades(); }
+function openEdit(sid){
+  var s=db.stocks.find(function(x){ return x.id===sid; });
+  if(!s) return;
+  syncSelects();
+  document.getElementById('edit-id').value=sid;
+  document.getElementById('edit-name').value=s.name||'';
+  document.getElementById('edit-tkr').value=s.ticker||'';
+  document.getElementById('edit-buy').value=s.avgBuy||'';
+  document.getElementById('edit-qty').value=s.qty||'';
+  document.getElementById('edit-tgt').value=s.target||'';
+  document.getElementById('edit-stp').value=s.stop||'';
+  document.getElementById('edit-memo').value=s.memo||'';
+  // 계좌 선택
+  var acctSel=document.getElementById('edit-acct');
+  var opts='<option value="">선택...</option>'+db.accounts.map(function(a){ return '<option value="'+a.id+'"'+(a.id===s.acctId?' selected':'')+'>'+esc(a.name)+'</option>'; }).join('');
+  acctSel.innerHTML=opts;
+  // 시장/전략 선택
+  document.getElementById('edit-mkt').value=s.mkt||'KOSPI';
+  document.getElementById('edit-str').value=s.strat||'중기';
+  document.getElementById('m-edit').classList.add('show');
+}
+function saveEdit(){
+  var sid=Number(document.getElementById('edit-id').value);
+  var s=db.stocks.find(function(x){ return x.id===sid; });
+  if(!s){ toast('종목을 찾을 수 없습니다'); return; }
+  var name=document.getElementById('edit-name').value.trim();
+  var buy=Number(document.getElementById('edit-buy').value);
+  var qty=Number(document.getElementById('edit-qty').value);
+  if(!name||!buy||!qty){ toast('종목명, 매수가, 수량은 필수입니다'); return; }
+  s.acctId=Number(document.getElementById('edit-acct').value)||s.acctId;
+  s.name=name;
+  s.ticker=document.getElementById('edit-tkr').value.trim();
+  s.mkt=document.getElementById('edit-mkt').value;
+  s.strat=document.getElementById('edit-str').value;
+  s.avgBuy=buy;
+  s.qty=qty;
+  s.target=document.getElementById('edit-tgt').value?Number(document.getElementById('edit-tgt').value):null;
+  s.stop=document.getElementById('edit-stp').value?Number(document.getElementById('edit-stp').value):null;
+  s.memo=document.getElementById('edit-memo').value.trim();
+  save(); renderAll(); closeM('m-edit');
+  toast('수정됐습니다');
+}
+
 function resetAll(){
   if(!confirm('정말 전체 데이터를 초기화할까요?')) return;
   db={accounts:[],stocks:[],trades:[]};
