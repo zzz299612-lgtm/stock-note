@@ -820,11 +820,11 @@ function renderDash(){
   document.getElementById('dash-ct').innerHTML=h;
 }
 function renderHold(){
-  var h='<button class="chip '+(hFil==='all'?'on':'')+'" onclick="setHF('all')">전체</button>';
-  db.accounts.forEach(function(a){ h+='<button class="chip '+(hFil==a.id?'on':'')+'" onclick="setHF('+a.id+')" style="'+(hFil==a.id?'background:'+a.color+';border-color:'+a.color:'')+'">'+esc(a.name)+'</button>'; });
+  var h='<button class="chip '+(hFil==="all"?"on":"")+'" onclick="setHF(\'all\')">전체</button>';
+  db.accounts.forEach(function(a){ h+='<button class="chip '+(hFil==a.id?"on":"")+'" onclick="setHF('+a.id+')" style="'+(hFil==a.id?'background:'+a.color+';border-color:'+a.color:"")+'">'+esc(a.name)+'</button>'; });
   document.getElementById('h-chips').innerHTML=h;
-  var list=hFil==='all'?db.stocks:db.stocks.filter(function(s){ return s.acctId===Number(hFil); });
-  var ao=hFil!=='all'?db.accounts.find(function(a){ return a.id===Number(hFil); }):null;
+  var list=hFil==="all"?db.stocks:db.stocks.filter(function(s){ return s.acctId===Number(hFil); });
+  var ao=hFil!=="all"?db.accounts.find(function(a){ return a.id===Number(hFil); }):null;
   document.getElementById('h-title').textContent=ao?ao.name+' 보유종목':'전체 보유종목';
   if(!list.length){ document.getElementById('hold-list').innerHTML='<div class="empty"><div class="ei">&#x1F4BC;</div>보유 종목이 없습니다</div>'; return; }
   var html='';
