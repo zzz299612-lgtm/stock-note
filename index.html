@@ -427,11 +427,20 @@ function fbLoad() {
   fetch(url + '/data.json')
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (d && d.accounts) {
-        db = d;
-        localStorage.setItem(KEY, JSON.stringify(db));
-        renderAll();
-        toast('동기화 완료');
+      if (d && typeof d === 'object') {
+        var loaded = {
+          accounts: Array.isArray(d.accounts) ? d.accounts : [],
+          stocks: Array.isArray(d.stocks) ? d.stocks : [],
+          trades: Array.isArray(d.trades) ? d.trades : []
+        };
+        if (loaded.accounts.length > 0 || loaded.stocks.length > 0) {
+          db = loaded;
+          localStorage.setItem(KEY, JSON.stringify(db));
+          renderAll();
+          toast('동기화 완료');
+        } else {
+          toast('동기화 완료 (저장된 데이터 없음)');
+        }
       } else {
         toast('동기화 완료 (저장된 데이터 없음)');
       }
