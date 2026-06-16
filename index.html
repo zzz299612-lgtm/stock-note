@@ -1073,6 +1073,56 @@ function resetAll(){
 }
 function renderAll(){ renderDash(); renderHold(); renderTrades(); syncSelects(); }
 
+function handleTodayImg(e){
+  var file = e.target.files[0]; if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    todayImg = ev.target.result;
+    document.getElementById('today-preview').src = ev.target.result;
+    document.getElementById('today-preview').style.display = 'block';
+    document.getElementById('today-upload').classList.add('has');
+    document.getElementById('today-upload-txt').textContent = file.name;
+    document.getElementById('today-analyze-btn').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function analyzeTodayImg(){
+  if (!todayImg){ toast('스크린샷을 먼저 업로드해 주세요'); return; }
+  if (!cfg.apiKey){ toast('설정에서 API 키를 먼저 입력해 주세요'); return; }
+  var btn = document.getElementById('today-analyze-btn');
+  btn.textContent = '분석 중...';
+  btn.disabled = true;
+  var stockNames = db.stocks.map(function(s){
+    return s.name + (s.ticker ? ' (' + s.ticker + ')' : '') + ' 평단가 ' + fmt(s.avgBuy) + '원';
+  }).join(', ');
+  var prompt = '이 MTS 보유종목 스크린샷에서 각 종목 현재가를 읽어 JSON으로만 답하세요. 보유종목: ' + stockNames + '. 형식: [{"name":"종목명","price":숫자,"change":"등락률"}]';
+  var imgB64 = todayImg.split(',')[1];
+  var result = await analyzeWithApi(prompt, imgB64);
+  if (!result){ btn.textContent = '스크린샷 분석해서 손익 계산'; btn.disabled=false; return; }
+  try {
+    var jsonStr = result.replace(/```json/g,'').replace(/```/g,'').trim();
+    var parsed = JSON.parse(jsonStr);
+    parsed.forEach(function(item){
+      var s = db.stocks.find(function(x){
+        return x.name === item.name || (x.ticker && x.ticker === item.name);
+      });
+      if (s) todayP[s.id] = item.price;
+    });
+    renderDash();
+    goTab('dash');
+    toast('현재가 반영 완료! 대시보드에서 확인하세요');
+  } catch(e){
+    var el = document.getElementById('today-result');
+    el.style.display = 'block';
+    el.innerHTML = '<div class="rbox"><div style="font-size:13px;line-height:1.8;white-space:pre-wrap">' + esc(result) + '</div></div>';
+    toast('결과를 확인해주세요');
+  }
+  btn.textContent = '다시 분석';
+  btn.disabled = false;
+}
+
+
 init();
 </script>
 </body>
