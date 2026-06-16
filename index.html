@@ -338,6 +338,13 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;font-size:14px}
     <button class="mc" onclick="closeM('m-cfg')">&#x2715;</button>
     <h2>&#x2699; 설정</h2>
     <div class="card">
+      <div class="ct">Claude API 키</div>
+      <div class="field"><label>API Key (sk-ant-...)</label>
+        <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off"/>
+      </div>
+      <button class="btn bp" style="margin-bottom:0" onclick="saveApiKey()">API 키 저장</button>
+    </div>
+    <div class="card">
       <div class="ct">Firebase 동기화</div>
       <div class="field"><label>Realtime Database URL</label><input type="text" id="fb-url-disp" placeholder="https://xxx-default-rtdb.firebaseio.com"/></div>
       <button class="btn bp" style="margin-bottom:8px" onclick="updateFbUrl()">URL 저장 및 동기화</button>
@@ -361,7 +368,7 @@ var KEY = 'sn_db_v1';
 var CFG = 'sn_cfg_v1';
 var FBURL = 'https://stock-note-b2294-default-rtdb.firebaseio.com';
 var db = {accounts:[], stocks:[], trades:[]};
-var cfg = {pin:'', fbUrl:'', setup:false};
+var cfg = {pin:'', fbUrl:'', setup:false, apiKey:''};
 var selColor = '#185FA5';
 var trType = 'buy';
 var chartImg = null;
@@ -500,6 +507,7 @@ function startApp() {
   document.getElementById('at-date').value = today;
   var fbUrl = cfg.fbUrl || FBURL;
   if (document.getElementById('fb-url-disp')) document.getElementById('fb-url-disp').value = fbUrl;
+  if (document.getElementById('api-key-input') && cfg.apiKey) document.getElementById('api-key-input').value = cfg.apiKey;
   renderAll();
   fbLoad();
 }
@@ -688,7 +696,7 @@ function buildAll(){
     if(s.stop) lines+='  손절까지: '+((s.stop-cur)/cur*100).toFixed(1)+'%\n';
   });
   var text='[전 종목 일괄 매매 판단 요청]\n날짜: '+today+(mkt?'\n\n[오늘 시황]\n'+mkt:'')+'\n'+lines+'\n각 종목별로:\n1. 오늘 판단: 추가매수 / 홀딩 / 일부매도 / 전량매도 / 손절\n2. 핵심 근거 1~2줄\n3. 오늘 주목할 가격대\n\n마지막에 전체 포트폴리오 한줄 요약 부탁해.';
-  showReq('today-result',text,false);
+  showReq('today-result',text,false,null);
 }
 
 function syncJAcct(){
@@ -761,27 +769,54 @@ function buildJudge(){
   if(news) text+='\n[오늘 특이사항]\n'+news+'\n';
   if(chartImg) text+='\n[차트 이미지 첨부 - 기술적 분석 포함 요청]\n';
   text+='\n기술적 분석(차트 기반), 오늘 추가매수/홀딩/일부매도/전량매도/손절 판단, 구체적 행동 지침(가격대 포함), 내일 이후 전략을 알려줘.';
-  showReq('j-result',text,!!chartImg);
+  showReq('j-result',text,!!chartImg,chartImg?chartImg.split(',')[1]:null);
 }
 
-function showReq(elId,text,hasImg){
-  var el=document.getElementById(elId);
-  el.style.display='block';
-  var h='<div class="rbox">';
-  h+='<div style="font-size:13px;font-weight:600;margin-bottom:4px">Claude에게 보낼 메시지</div>';
-  h+='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px">복사 후 Claude Projects에 붙여넣으세요</div>';
-  h+='<div class="rtxt">'+esc(text)+'</div>';
-  h+='<button class="cbtn" id="cbtn-'+elId+'">메시지 복사</button>';
-  h+='<button class="obtn" id="proj-'+elId+'" style="background:var(--blue);color:#fff;border:none;margin-top:6px">복사 + Claude Projects 열기</button>';
-  if(hasImg) h+='<div class="wbox" style="margin-top:8px">차트 이미지를 Claude Projects에서 함께 첨부해 주세요 — 메시지 붙여넣기 후 이미지 첨부하고 전송</div>';
-  h+='</div>';
-  el.innerHTML=h;
-  document.getElementById('cbtn-'+elId).addEventListener('click',function(){ copyT(text); });
-  document.getElementById('proj-'+elId).addEventListener('click',function(){
+function showReq(elId, text, hasImg, imgBase64){
+  var el = document.getElementById(elId);
+  el.style.display = 'block';
+  var hasApi = !!cfg.apiKey;
+  var h = '<div class="rbox">';
+  if (hasApi) {
+    h += '<div style="font-size:13px;font-weight:600;margin-bottom:8px">AI 분석</div>';
+    h += '<button class="cbtn" id="ai-btn-'+elId+'" style="background:var(--green);margin-bottom:8px">AI 분석 시작</button>';
+    h += '<div id="ai-result-'+elId+'" style="display:none;margin-bottom:10px;padding:12px;background:var(--bg);border-radius:var(--rs);font-size:13px;line-height:1.8;white-space:pre-wrap"></div>';
+    h += '<div class="divider"></div>';
+  }
+  h += '<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">또는 Claude Projects에서 직접 분석</div>';
+  h += '<div class="rtxt">'+esc(text)+'</div>';
+  h += '<button class="cbtn" id="cbtn-'+elId+'">메시지 복사</button>';
+  h += '<button class="obtn" id="proj-'+elId+'" style="background:var(--blue);color:#fff;border:none;margin-top:6px">복사 + Claude Projects 열기</button>';
+  if (hasImg && !hasApi) h += '<div class="wbox" style="margin-top:8px">차트 이미지를 Claude Projects에서 함께 첨부해 주세요</div>';
+  h += '</div>';
+  el.innerHTML = h;
+
+  document.getElementById('cbtn-'+elId).addEventListener('click', function(){ copyT(text); });
+  document.getElementById('proj-'+elId).addEventListener('click', function(){
     copyT(text);
-    setTimeout(function(){ window.open('https://claude.ai/project','_blank'); },300);
+    setTimeout(function(){ window.open('https://claude.ai/projects','_blank'); }, 300);
   });
-  el.scrollIntoView({behavior:'smooth',block:'start'});
+
+  if (hasApi) {
+    document.getElementById('ai-btn-'+elId).addEventListener('click', async function(){
+      var btn = document.getElementById('ai-btn-'+elId);
+      var resultEl = document.getElementById('ai-result-'+elId);
+      btn.textContent = '분석 중...';
+      btn.disabled = true;
+      resultEl.style.display = 'block';
+      resultEl.textContent = '⏳ Claude가 분석하고 있습니다...';
+      var result = await analyzeWithApi(text, imgBase64 || null);
+      if (result) {
+        resultEl.textContent = result;
+        btn.textContent = '다시 분석';
+      } else {
+        resultEl.textContent = '분석에 실패했습니다. 다시 시도해 주세요.';
+        btn.textContent = 'AI 분석 시작';
+      }
+      btn.disabled = false;
+    });
+  }
+  el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function copyT(text){
   if(navigator.clipboard){ navigator.clipboard.writeText(text).then(function(){ toast('복사됐습니다! Claude.ai에 붙여넣으세요'); }); }
@@ -949,6 +984,45 @@ function saveEdit(){
   s.memo=document.getElementById('edit-memo').value.trim();
   save(); renderAll(); closeM('m-edit');
   toast('수정됐습니다');
+}
+
+function saveApiKey(){
+  var key = document.getElementById('api-key-input').value.trim();
+  if (!key || !key.startsWith('sk-ant-')) { toast('올바른 API 키를 입력해 주세요 (sk-ant-로 시작)'); return; }
+  cfg.apiKey = key; saveCfg();
+  toast('API 키가 저장됐습니다');
+}
+
+async function analyzeWithApi(text, imgBase64) {
+  if (!cfg.apiKey) { toast('설정에서 API 키를 먼저 입력해 주세요'); return null; }
+  var messages = [{role:'user', content:[]}];
+  if (imgBase64) {
+    messages[0].content.push({type:'image', source:{type:'base64', media_type:'image/jpeg', data:imgBase64}});
+  }
+  messages[0].content.push({type:'text', text:text});
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: '당신은 한국 주식 전문 애널리스트입니다. 기술적 분석과 펀더멘털을 종합하여 오늘의 매매 판단을 명확하게 제시합니다. 한국어로 간결하게 답변하세요.',
+        messages: messages
+      })
+    });
+    var data = await res.json();
+    if (data.error) { toast('API 오류: ' + data.error.message); return null; }
+    return data.content[0].text;
+  } catch(e) {
+    toast('API 연결 실패: ' + e.message);
+    return null;
+  }
 }
 
 function resetAll(){
