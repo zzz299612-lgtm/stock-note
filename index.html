@@ -1052,7 +1052,7 @@ async function analyzeWithApi(text, imgBase64) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 2000,
         system: '당신은 한국 주식 전문 애널리스트입니다. 기술적 분석과 펀더멘털을 종합하여 오늘의 매매 판단을 명확하게 제시합니다. 한국어로 간결하게 답변하세요.',
         messages: messages
       })
@@ -1097,24 +1097,51 @@ async function analyzeTodayImg(){
   resultEl.style.display = 'block';
   resultEl.innerHTML = '<div class="rbox"><div style="text-align:center;padding:20px;color:var(--txt2)">Claude가 스크린샷을 분석하고 있습니다...</div></div>';
   var mkt = document.getElementById('today-mkt').value;
-  var stockLines = db.stocks.map(function(s){
+
+  // 개별주 vs ETF 분리
+  var etfKeywords = ['TIGER','KODEX','ACE','KINDEX','ARIRANG','HANARO','SOL'];
+  var stocks = db.stocks;
+  var etfStocks = stocks.filter(function(s){
+    return etfKeywords.some(function(k){ return s.name.toUpperCase().indexOf(k) >= 0; }) || s.mkt === 'ETF';
+  });
+  var indivStocks = stocks.filter(function(s){
+    return !etfKeywords.some(function(k){ return s.name.toUpperCase().indexOf(k) >= 0; }) && s.mkt !== 'ETF';
+  });
+
+  var indivLines = indivStocks.map(function(s){
     var line = s.name + ': 평단가 ' + fmt(s.avgBuy) + '원, ' + fmt(s.qty) + '주';
     if (s.target) line += ', 목표가 ' + fmt(s.target) + '원';
     if (s.stop) line += ', 손절선 ' + fmt(s.stop) + '원';
     if (s.memo) line += ', thesis: ' + s.memo;
     return line;
   }).join(' | ');
-  var p1 = '아래는 내 MTS 보유종목 스크린샷이야. 스크린샷에서 각 종목의 현재가를 직접 읽어서 분석해줘.';
-  var p2 = '[내 보유종목 정보] ' + stockLines;
-  var p3 = mkt ? '[오늘 시황] ' + mkt : '';
-  var p4 = '[요청사항] 1. 스크린샷에서 읽은 현재가 기준으로 종목별 손익을 계산해줘. 2. 각 종목 판단(홀딩/추가매수/일부매도/손절검토)은 반드시 목표가, 손절선, 현재 손익률, thesis를 근거로 설명해줘. 목표가/손절선 없으면 기술적 흐름 기준. 3. 전체 포트폴리오 오늘 종합평가. 4. 내일 구체적 대응전략. JSON이나 마크다운 테이블 없이 자연스러운 한국어로 작성해줘.';
-  var prompt = [p1, p2, p3, p4].filter(Boolean).join(' ');
+
+  var etfLines = etfStocks.map(function(s){
+    return s.name + ': 평단가 ' + fmt(s.avgBuy) + '원, ' + fmt(s.qty) + '주 (장기보유)';
+  }).join(' | ');
+
+  var p1 = '이 MTS 보유종목 스크린샷을 분석해줘.';
+  var p2 = indivLines ? '[개별주 - 상세 분석 필요] ' + indivLines : '';
+  var p3 = etfLines ? '[ETF - 장기보유 중, 간단 요약만] ' + etfLines : '';
+  var p4 = mkt ? '[오늘 시황] ' + mkt : '';
+  var p5 = [
+    '[요청사항]',
+    '1. 개별주(삼성전자, 키움증권, 에이피알 등)는 현재가, 손익, 목표가/손절선 기준 매매판단을 근거와 함께 상세히 설명해줘.',
+    '2. ETF는 전체 합산 손익만 간단히 한 줄씩 요약해줘. 상세 분석 불필요.',
+    '3. 오늘 포트폴리오 전체 한줄 요약.',
+    '4. 내일 당장 행동해야 할 것만 간결하게.',
+    'JSON, 마크다운 테이블, 헤더(#) 없이 자연스러운 한국어로.'
+  ].join(' ');
+
+  var prompt = [p1, p2, p3, p4, p5].filter(Boolean).join(' ');
   var imgB64 = todayImg.split(',')[1];
   var result = await analyzeWithApi(prompt, imgB64);
+
   if (!result){
     resultEl.innerHTML = '<div class="rbox"><div style="color:var(--red);padding:12px">분석 실패. 다시 시도해 주세요.</div></div>';
     btn.textContent = '다시 분석'; btn.disabled = false; return;
   }
+
   renderDash();
   resultEl.innerHTML = '<div class="rbox">' +
     '<div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--blue)">오늘 포트폴리오 종합 분석</div>' +
