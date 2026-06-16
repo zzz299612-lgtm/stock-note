@@ -172,16 +172,21 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;font-size:14px}
 
   <div class="pane" id="pane-today">
     <div class="card">
-      <div class="ct">오늘 현재가 입력</div>
-      <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">MTS에서 확인한 현재가를 입력하면 전 종목 일괄 판단 메시지를 생성합니다</p>
-      <div id="today-rows"></div>
+      <div class="ct">MTS 보유종목 스크린샷</div>
+      <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">MTS 보유종목 화면을 캡처해서 올리면 Claude가 현재가를 자동으로 읽어 손익을 계산합니다</p>
+      <div class="upbox" id="today-upload" onclick="document.getElementById('today-file').click()">
+        <div style="font-size:32px">&#x1F4F8;</div>
+        <p id="today-upload-txt">MTS 보유종목 화면 스크린샷 업로드<br><span style="font-size:11px">현재가가 보이는 화면으로 캡처해 주세요</span></p>
+        <img id="today-preview" style="display:none;width:100%;max-height:200px;object-fit:contain;border-radius:var(--rs);margin-top:8px" alt="스크린샷"/>
+      </div>
+      <input type="file" id="today-file" accept="image/*" style="display:none" onchange="handleTodayImg(event)"/>
       <div style="margin-top:12px">
         <div class="field"><label>오늘 시황 / 특이사항 (선택)</label>
           <textarea id="today-mkt" placeholder="예: 코스피 약세, 반도체 외국인 순매도..."></textarea>
         </div>
       </div>
     </div>
-    <button class="btn bp" onclick="buildAll()">&#x2728; 전 종목 일괄 판단 요청 생성</button>
+    <button class="btn bp" id="today-analyze-btn" onclick="analyzeTodayImg()" style="display:none">&#x2728; 스크린샷 분석해서 손익 계산</button>
     <div id="today-result" style="display:none;margin-top:10px"></div>
   </div>
 
@@ -375,6 +380,7 @@ var chartImg = null;
 var hFil = 'all';
 var trFil = 'all';
 var todayP = {};
+var todayImg = null;
 var pinBuf = '';
 
 function init() {
@@ -850,17 +856,48 @@ function renderDash(){
     h+='</div>';
   }
   if(db.stocks.length){
-    h+='<div class="card"><div class="ct">보유종목</div>';
-    db.stocks.forEach(function(s){
-      var acct=db.accounts.find(function(a){ return a.id===s.acctId; });
-      h+='<div class="si"><div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">';
-      if(acct) h+='<div style="width:8px;height:8px;border-radius:50%;background:'+acct.color+'"></div>';
-      h+='<span style="font-size:14px;font-weight:600">'+esc(s.name)+'</span>';
-      if(s.ticker) h+='<span class="tag">'+s.ticker+'</span>';
-      h+='<span class="tag">'+s.strat+'</span></div>';
-      h+='<div style="font-size:12px;color:var(--txt2)">매수가 '+fmt(s.avgBuy)+'원 · '+fmt(s.qty)+'주 · '+fmt(s.avgBuy*s.qty)+'원</div>';
-      h+='<div style="font-size:12px;margin-top:2px">목표가 '+(s.target?'<span style="color:var(--green)">'+fmt(s.target)+'원</span>':'<span style="color:var(--warn)">미설정</span>')+' · 손절선 '+(s.stop?'<span style="color:var(--red)">'+fmt(s.stop)+'원</span>':'<span style="color:var(--warn)">미설정</span>')+'</div></div>';
-    });
+    var hasTodayP = Object.keys(todayP).length > 0;
+    h+='<div class="card"><div class="ct">'+(hasTodayP?'오늘 손익 현황':'보유종목')+'</div>';
+    if(hasTodayP){
+      var totalPnl=0;
+      db.stocks.forEach(function(s){
+        var cur=todayP[s.id];
+        var acct=db.accounts.find(function(a){ return a.id===s.acctId; });
+        h+='<div class="si"><div style="display:flex;align-items:center;justify-content:space-between">';
+        h+='<div><span style="font-size:14px;font-weight:600">'+esc(s.name)+'</span>';
+        if(acct) h+='<span class="tag" style="border-color:'+acct.color+';color:'+acct.color+'">'+esc(acct.name)+'</span>';
+        h+='</div>';
+        if(cur){
+          var pnl=(cur-s.avgBuy)*s.qty;
+          var pct=((cur-s.avgBuy)/s.avgBuy*100).toFixed(2);
+          totalPnl+=pnl;
+          h+='<div style="text-align:right"><div style="font-size:15px;font-weight:700" class="'+(pnl>=0?'pos':'neg')+'">'+(pnl>=0?'+':'')+fmt(Math.round(pnl))+'원</div>';
+          h+='<div style="font-size:11px;color:var(--txt2)">'+fmt(cur)+'원 ('+(pct>=0?'+':'')+pct+'%)</div></div>';
+        } else {
+          h+='<div style="font-size:12px;color:var(--txt2)">현재가 없음</div>';
+        }
+        h+='</div>';
+        h+='<div style="font-size:11px;color:var(--txt2);margin-top:2px">평단가 '+fmt(s.avgBuy)+'원 · '+fmt(s.qty)+'주</div>';
+        h+='</div>';
+      });
+      h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center">';
+      h+='<span style="font-size:13px;font-weight:600">오늘 총 손익</span>';
+      h+='<span style="font-size:16px;font-weight:700" class="'+(totalPnl>=0?'pos':'neg')+'">'+(totalPnl>=0?'+':'')+fmt(Math.round(totalPnl))+'원</span>';
+      h+='</div>';
+      h+='<button onclick="todayP={};renderDash();" style="margin-top:8px;width:100%;padding:8px;background:transparent;border:1px solid var(--bdr);border-radius:var(--rs);font-size:12px;color:var(--txt2);cursor:pointer">초기화 (내일 새로 받기)</button>';
+    } else {
+      db.stocks.forEach(function(s){
+        var acct=db.accounts.find(function(a){ return a.id===s.acctId; });
+        h+='<div class="si"><div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">';
+        if(acct) h+='<div style="width:8px;height:8px;border-radius:50%;background:'+acct.color+'"></div>';
+        h+='<span style="font-size:14px;font-weight:600">'+esc(s.name)+'</span>';
+        if(s.ticker) h+='<span class="tag">'+s.ticker+'</span>';
+        h+='<span class="tag">'+s.strat+'</span></div>';
+        h+='<div style="font-size:12px;color:var(--txt2)">매수가 '+fmt(s.avgBuy)+'원 · '+fmt(s.qty)+'주 · '+fmt(s.avgBuy*s.qty)+'원</div>';
+        h+='<div style="font-size:12px;margin-top:2px">목표가 '+(s.target?'<span style="color:var(--green)">'+fmt(s.target)+'원</span>':'<span style="color:var(--warn)">미설정</span>')+' · 손절선 '+(s.stop?'<span style="color:var(--red)">'+fmt(s.stop)+'원</span>':'<span style="color:var(--warn)">미설정</span>')+'</div></div>';
+      });
+      h+='<div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:var(--rs);font-size:12px;color:var(--txt2);text-align:center">&#x26A1; 오늘시황 탭에서 MTS 스크린샷을 올리면 실시간 손익이 여기 표시됩니다</div>';
+    }
     h+='</div>';
   }
   document.getElementById('dash-ct').innerHTML=h;
