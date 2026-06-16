@@ -199,8 +199,8 @@ textarea{resize:vertical;min-height:65px;line-height:1.6;font-size:14px}
       </div>
       <div class="divider"></div>
       <div class="g2" style="margin-bottom:10px">
-        <div class="field" style="margin-bottom:0"><label>현재가 (원)*</label><input id="j-price" type="number" placeholder="59500" oninput="calcJP()"/></div>
-        <div class="field" style="margin-bottom:0"><label>등락률</label><input id="j-chg" type="text" placeholder="+1.2%"/></div>
+        <div class="field" style="margin-bottom:0"><label>현재가 (원) <span style="color:var(--txt2);font-weight:400">(선택 — 차트에서 자동 확인)</span></label><input id="j-price" type="number" placeholder="차트 업로드 시 생략 가능" oninput="calcJP()"/></div>
+        <div class="field" style="margin-bottom:0"><label>등락률 <span style="color:var(--txt2);font-weight:400">(선택)</span></label><input id="j-chg" type="text" placeholder="예: +1.2%"/></div>
       </div>
       <div id="j-pnl" style="display:none;background:var(--bg);border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;font-size:13px"></div>
       <div class="field">
@@ -751,8 +751,8 @@ function buildJudge(){
   var cur=document.getElementById('j-price').value;
   if(!cur){ toast('현재 주가를 입력해 주세요'); return; }
   var acct=db.accounts.find(function(a){ return a.id===s.acctId; });
-  var pct=((Number(cur)-s.avgBuy)/s.avgBuy*100).toFixed(2);
-  var pnl=Math.round((Number(cur)-s.avgBuy)*s.qty);
+  var pct = cur ? ((Number(cur)-s.avgBuy)/s.avgBuy*100).toFixed(2) : null;
+  var pnl = cur ? Math.round((Number(cur)-s.avgBuy)*s.qty) : null;
   var hist=db.trades.filter(function(t){ return t.name===s.name&&t.acctId===s.acctId; }).sort(function(a,b){ return a.date.localeCompare(b.date); }).map(function(t){ return '  '+t.date+' '+(t.type==='buy'?'매수':'매도')+' '+fmt(t.price)+'원x'+t.qty+'주'+(t.memo?' ('+t.memo+')':''); }).join('\n');
   var text='[오늘 매매 판단 요청]\n\n';
   text+='계좌: '+(acct?acct.name:'')+'\n';
@@ -760,10 +760,14 @@ function buildJudge(){
   text+='평균매수가: '+fmt(s.avgBuy)+'원 / '+fmt(s.qty)+'주 / 총 '+fmt(s.avgBuy*s.qty)+'원\n';
   text+='목표가: '+(s.target?fmt(s.target)+'원':'미설정')+' / 손절선: '+(s.stop?fmt(s.stop)+'원':'미설정')+'\n';
   if(s.memo) text+='Thesis: '+s.memo+'\n';
-  text+='\n현재가: '+fmt(Number(cur))+'원 / 등락: '+(document.getElementById('j-chg').value||'미입력')+'\n';
-  text+='현재 손익: '+(Number(pct)>=0?'+':'')+pct+'% ('+(pnl>=0?'+':'')+fmt(pnl)+'원)\n';
-  if(s.target) text+='목표가까지: '+((s.target-Number(cur))/Number(cur)*100).toFixed(1)+'%\n';
-  if(s.stop) text+='손절선까지: '+((s.stop-Number(cur))/Number(cur)*100).toFixed(1)+'%\n';
+  if(cur){
+    text+='\n현재가: '+fmt(Number(cur))+'원 / 등락: '+(document.getElementById('j-chg').value||'미입력')+'\n';
+    text+='현재 손익: '+(Number(pct)>=0?'+':'')+pct+'% ('+(pnl>=0?'+':'')+fmt(pnl)+'원)\n';
+    if(s.target) text+='목표가까지: '+((s.target-Number(cur))/Number(cur)*100).toFixed(1)+'%\n';
+    if(s.stop) text+='손절선까지: '+((s.stop-Number(cur))/Number(cur)*100).toFixed(1)+'%\n';
+  } else {
+    text+='\n현재가: 차트 이미지에서 확인\n';
+  }
   if(hist) text+='\n[매매 이력]\n'+hist+'\n';
   var news=document.getElementById('j-news').value;
   if(news) text+='\n[오늘 특이사항]\n'+news+'\n';
